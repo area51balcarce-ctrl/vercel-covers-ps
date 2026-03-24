@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AREA 51 - Covers PS4/PS5</title>
+  <style>
+    :root{--bg:#06070c;--panel:#10131c;--panel2:#171c28;--text:#eef2ff;--muted:#9aa4bd;--accent:#39ff9c;--accent2:#00d4ff;--border:rgba(255,255,255,.08);--danger:#ff5d73;--warn:#ffca5f}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:radial-gradient(circle at top,#24103d 0%,var(--bg) 45%);color:var(--text);min-height:100vh}
+    .wrap{max-width:1320px;margin:0 auto;padding:24px}.hero{display:flex;gap:16px;align-items:center;margin-bottom:20px}.badge{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04110a;font-weight:800;box-shadow:0 0 20px rgba(57,255,156,.25)}
+    h1{margin:0;font-size:28px}.sub{margin:4px 0 0;color:var(--muted)}.panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.22);margin-bottom:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em} textarea,button,input{font:inherit} input,textarea{width:100%;border:1px solid var(--border);background:rgba(255,255,255,.03);color:var(--text);border-radius:12px;padding:12px 14px;outline:none} textarea{min-height:300px;resize:vertical;line-height:1.45;white-space:pre-wrap}
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px} button{border:0;border-radius:999px;padding:12px 16px;cursor:pointer;font-weight:700}.primary{background:linear-gradient(90deg,var(--accent),#7dffcb);color:#08140d}.secondary{background:#1e2638;color:var(--text);border:1px solid var(--border)}.danger{background:#2b1820;color:#ffd6dd;border:1px solid rgba(255,93,115,.18)}
+    .stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.pill{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:8px 12px;font-size:13px}.hint{color:var(--muted);font-size:13px;margin-top:10px}.loader{display:none;margin-top:12px;color:var(--warn);font-weight:700}
+    .preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-top:18px}.card{background:linear-gradient(180deg,#0d1220,#121929);border:1px solid var(--border);border-radius:16px;overflow:hidden}.thumb-wrap{aspect-ratio:3/4;background:#0d111a;display:flex;align-items:center;justify-content:center;overflow:hidden}.thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block}.no-thumb{color:var(--muted);font-size:13px;padding:14px;text-align:center}.card-body{padding:10px 12px}.game-title{margin:0;font-size:14px;font-weight:700;line-height:1.35}.game-url{margin-top:8px;font-size:12px;color:var(--muted);word-break:break-all}
+    @media (max-width:980px){.grid{grid-template-columns:1fr}.wrap{padding:16px}h1{font-size:24px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="badge">A51</div>
+      <div>
+        <h1>Covers PS4 / PS5 - Modo PRO</h1>
+        <p class="sub">Pegás tu lista y devuelve el título limpio + link directo del cover.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <label for="entrada">Listado</label>
+        <textarea id="entrada" placeholder="Ejemplo:
+A
+🔥ABZU
+$ 7.700
+🔥ALIEN INSOLATION THE COLLECTION
+$ 9.500
+🔥ASSASSINS CREED ODYSSEY
+$ 15.000"></textarea>
+
+        <div class="btns">
+          <button class="primary" id="btnGenerar">Generar covers</button>
+          <button class="secondary" id="btnEjemplo">Cargar ejemplo</button>
+          <button class="secondary" id="btnCopiar">Copiar resultado</button>
+          <button class="danger" id="btnLimpiar">Limpiar</button>
+        </div>
+
+        <div class="loader" id="loader">Buscando covers...</div>
+
+        <div class="stats">
+          <div class="pill" id="statLineas">Líneas: 0</div>
+          <div class="pill" id="statJuegos">Juegos: 0</div>
+          <div class="pill" id="statEncontrados">Encontrados: 0</div>
+        </div>
+
+        <div class="hint">
+          Mantiene encabezados tipo A / B / C. Ignora líneas de precio. Busca PS4 y PS5 desde servidor.
+        </div>
+      </div>
+
+      <div class="panel">
+        <label for="salida">Resultado listo para copiar</label>
+        <textarea id="salida" readonly placeholder="Acá sale el resultado..."></textarea>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label>Vista previa</label>
+      <div id="preview" class="preview-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    const entrada = document.getElementById('entrada');
+    const salida = document.getElementById('salida');
+    const loader = document.getElementById('loader');
+    const preview = document.getElementById('preview');
+    const statLineas = document.getElementById('statLineas');
+    const statJuegos = document.getElementById('statJuegos');
+    const statEncontrados = document.getElementById('statEncontrados');
+
+    function esPrecio(linea) {
+      return /^\$?\s*\d{1,3}(?:\.\d{3})*(?:,\d+)?(?:\s*usd)?$/i.test(linea.trim());
+    }
+
+    function esLetra(linea) {
+      return /^[A-ZÑ]$/i.test(linea.trim());
+    }
+
+    function limpiarTituloJuego(linea) {
+      return String(linea)
+        .replace(/^[🔥🎮📱⭐💣\s]+/g, '')
+        .replace(/\b(PS4-PS5|PS4\/PS5|PS5|PS4)\b/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function createPreviewCard(titulo, imageUrl) {
+      const div = document.createElement('div');
+      div.className = 'card';
+      if (imageUrl) {
+        div.innerHTML = `
+          <div class="thumb-wrap">
+            <img src="${imageUrl}" alt="${escapeHtml(titulo)}" loading="lazy" referrerpolicy="no-referrer">
+          </div>
+          <div class="card-body">
+            <p class="game-title">${escapeHtml(titulo)}</p>
+            <p class="game-url">${escapeHtml(imageUrl)}</p>
+          </div>`;
+      } else {
+        div.innerHTML = `
+          <div class="thumb-wrap"><div class="no-thumb">Sin cover</div></div>
+          <div class="card-body">
+            <p class="game-title">${escapeHtml(titulo)}</p>
+            <p class="game-url">SIN LINK</p>
+          </div>`;
+      }
+      return div;
+    }
+
+    async function generarResultado() {
+      const lineas = entrada.value.split(/\r?\n/);
+      statLineas.textContent = 'Líneas: ' + lineas.length;
+      preview.innerHTML = '';
+      salida.value = '';
+      loader.style.display = 'block';
+
+      const titulos = [];
+      const estructura = [];
+      for (const linea of lineas) {
+        const original = linea.trim();
+        if (!original) {
+          estructura.push({ tipo: 'blank', valor: '' });
+          continue;
+        }
+        if (esPrecio(original)) continue;
+        if (esLetra(original)) {
+          estructura.push({ tipo: 'header', valor: original });
+          continue;
+        }
+        const limpio = limpiarTituloJuego(original);
+        if (!limpio) continue;
+        estructura.push({ tipo: 'game', valor: limpio });
+        titulos.push(limpio);
+      }
+
+      statJuegos.textContent = 'Juegos: ' + titulos.length;
+      statEncontrados.textContent = 'Encontrados: 0';
+
+      if (!titulos.length) {
+        loader.style.display = 'none';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/covers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ titles: titulos })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error consultando covers');
+
+        const coverMap = new Map();
+        (data.results || []).forEach(item => {
+          coverMap.set(item.title, item.coverUrl || 'SIN LINK');
+        });
+
+        let encontrados = 0;
+        const salidaFinal = [];
+        for (const item of estructura) {
+          if (item.tipo === 'blank') {
+            salidaFinal.push('');
+            continue;
+          }
+          if (item.tipo === 'header') {
+            salidaFinal.push(item.valor);
+            continue;
+          }
+          const link = coverMap.get(item.valor) || 'SIN LINK';
+          if (link !== 'SIN LINK') encontrados++;
+          salidaFinal.push(item.valor);
+          salidaFinal.push(link);
+          preview.appendChild(createPreviewCard(item.valor, link === 'SIN LINK' ? '' : link));
+        }
+
+        salida.value = salidaFinal.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        statEncontrados.textContent = 'Encontrados: ' + encontrados;
+      } catch (err) {
+        alert(err.message || 'Error generando covers');
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
+    document.getElementById('btnGenerar').addEventListener('click', generarResultado);
+    document.getElementById('btnEjemplo').addEventListener('click', () => {
+      entrada.value = `A\n🔥ABZU\n$ 7.700\n🔥ALIEN INSOLATION THE COLLECTION\n$ 9.500\n🔥ASSASSINS CREED ODYSSEY\n$ 15.000`;
+    });
+    document.getElementById('btnCopiar').addEventListener('click', async () => {
+      if (!salida.value.trim()) return;
+      await navigator.clipboard.writeText(salida.value);
+      const btn = document.getElementById('btnCopiar');
+      const old = btn.textContent;
+      btn.textContent = 'Copiado ✅';
+      setTimeout(() => btn.textContent = old, 1400);
+    });
+    document.getElementById('btnLimpiar').addEventListener('click', () => {
+      entrada.value = '';
+      salida.value = '';
+      preview.innerHTML = '';
+      statLineas.textContent = 'Líneas: 0';
+      statJuegos.textContent = 'Juegos: 0';
+      statEncontrados.textContent = 'Encontrados: 0';
+      loader.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
