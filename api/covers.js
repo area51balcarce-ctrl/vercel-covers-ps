@@ -1,4 +1,5 @@
-const TGDB_BASE = 'https://api.thegamesdb.net/v1';
+const TGDB_BASE_V1 = 'https://api.thegamesdb.net/v1';
+const TGDB_BASE_V11 = 'https://api.thegamesdb.net/v1.1';
 const PLATFORM_PS4 = 4919;
 const PLATFORM_PS5 = 4980;
 
@@ -42,11 +43,9 @@ function scoreMatch(input, candidate) {
 
   const words = a.split(/\s+/).filter(Boolean);
   let score = 0;
-
   for (const word of words) {
     if (b.includes(word)) score += 8;
   }
-
   return score;
 }
 
@@ -92,13 +91,11 @@ function generateVariants(title) {
     }
   });
 
-  // fallbacks extra
   [limpio, simple].forEach(v => {
     if (!v) return;
     const byColon = v.split(':')[0]?.trim();
     const byDash = v.split('-')[0]?.trim();
     const byParen = v.split('(')[0]?.trim();
-
     if (byColon) variants.add(byColon);
     if (byDash) variants.add(byDash);
     if (byParen) variants.add(byParen);
@@ -107,25 +104,38 @@ function generateVariants(title) {
   return Array.from(variants).filter(Boolean);
 }
 
-async function tgdbFetch(path, apiKey) {
-  const url = `${TGDB_BASE}${path}${path.includes('?') ? '&' : '?'}apikey=${encodeURIComponent(apiKey)}`;
+async function fetchText(url) {
   const res = await fetch(url, {
     headers: {
-      'Accept': 'application/json'
+      'Accept': 'application/json',
+      'User-Agent': 'Mozilla/5.0 AREA51 Covers'
     }
   });
-
   const text = await res.text();
+  return { ok: res.ok, status: res.status, text };
+}
 
-  if (!res.ok) {
-    throw new Error(`TGDB ${res.status}: ${text.slice(0, 180)}`);
-  }
-
+function safeJsonParse(text) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(`Respuesta no JSON de TGDB: ${text.slice(0, 180)}`);
+    return null;
   }
+}
+
+async function tgdbFetch(path, apiKey) {
+  const urls = [
+    `${TGDB_BASE_V11}${path}${path.includes('?') ? '&' : '?'}apikey=${encodeURIComponent(apiKey)}`,
+    `${TGDB_BASE_V1}${path}${path.includes('?') ? '&' : '?'}apikey=${encodeURIComponent(apiKey)}`
+  ];
+
+  for (const url of urls) {
+    const { ok, text } = await fetchText(url);
+    const json = safeJsonParse(text);
+    if (ok && json) return json;
+  }
+
+  return null;
 }
 
 async function buscarJuegoPorNombre(nombre, apiKey) {
@@ -222,29 +232,61 @@ function resolverUrlCoverDesdeImages(data, gameId) {
   return base.replace(/\/+$/, '/') + String(filename).replace(/^\/+/, '');
 }
 
+async function buscarEnBingImagenDirecta(title) {
+  const query = encodeURIComponent(`${title} ps4 ps5 game cover`);
+  const url = `https://www.bing.com/images/search?q=${query}&form=HDRSC3`;
+
+  const { ok, text } = await fetchText(url);
+  if (!ok || !text) return null;
+
+  const patterns = [
+    /"murl":"(https?:\/\/[^"]+)"/i,
+    /murl&quot;:&quot;(https?:\/\/[^"&]+)"/i,
+    /"turl":"(https?:\/\/[^"]+)"/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1]
+        .replace(/\\u002f/g, '/')
+        .replace(/\\\//g, '/')
+        .replace(/&amp;/g, '&');
+    }
+  }
+
+  return null;
+}
+
 async function resolverCover(title, apiKey) {
   const variants = generateVariants(title);
 
   for (const variant of variants) {
     const juego = await buscarJuegoPorNombre(variant, apiKey);
-    if (!juego?.id) continue;
 
-    let coverUrl = null;
+    if (juego?.id) {
+      let coverUrl = null;
 
-    try {
-      const detalle = await buscarDetalleJuego(juego.id, apiKey);
-      coverUrl = resolverUrlCoverDesdeDetalle(detalle, juego.id);
-    } catch (_) {}
-
-    if (!coverUrl) {
       try {
-        const images = await buscarImagenesJuego(juego.id, apiKey);
-        coverUrl = resolverUrlCoverDesdeImages(images, juego.id);
+        const detalle = await buscarDetalleJuego(juego.id, apiKey);
+        coverUrl = resolverUrlCoverDesdeDetalle(detalle, juego.id);
       } catch (_) {}
+
+      if (!coverUrl) {
+        try {
+          const images = await buscarImagenesJuego(juego.id, apiKey);
+          coverUrl = resolverUrlCoverDesdeImages(images, juego.id);
+        } catch (_) {}
+      }
+
+      if (coverUrl) {
+        return { title, coverUrl };
+      }
     }
 
-    if (coverUrl) {
-      return { title, coverUrl };
+    const bingCover = await buscarEnBingImagenDirecta(variant);
+    if (bingCover) {
+      return { title, coverUrl: bingCover };
     }
   }
 
@@ -272,8 +314,7 @@ export default async function handler(req, res) {
       } catch (err) {
         results.push({
           title,
-          coverUrl: null,
-          error: err.message
+          coverUrl: null
         });
       }
     }
